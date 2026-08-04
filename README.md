@@ -1,93 +1,395 @@
-# Curious Agent v1 — a real, running curiosity-driven RL system
+# Curious Agent v1 🧠
 
-This is a working implementation, not pseudocode. It answers the question
-"what does a machine being curious actually look like, mechanically?" with
-one concrete example: an agent that generates its own reward signal from
-*being wrong about what will happen next*.
+### Curiosity-Driven Reinforcement Learning using Intrinsic Curiosity Modules (ICM) and PPO
 
-## What's actually in here
+> *Can an AI learn to explore simply because it is curious?*
+
+Curious Agent v1 is an experimental artificial intelligence research project that demonstrates how intrinsic motivation can improve learning in sparse-reward environments. Instead of relying only on external rewards, the agent generates its own internal reward by measuring how surprising the consequences of its actions are.
+
+The project combines **Intrinsic Curiosity Modules (ICM)** with **Proximal Policy Optimization (PPO)** to build an autonomous agent capable of efficient exploration without prior knowledge of the environment.
+
+---
+
+# Overview
+
+Traditional reinforcement learning agents learn only when the environment provides rewards.
 
 ```
-environment.py    Sparse-reward GridWorld (maze). Zero reward until the goal
-                   is found — deliberately, so a normal RL agent has almost
-                   nothing to learn from until curiosity gives it something.
-icm.py             Intrinsic Curiosity Module (Pathak et al., 2017):
-                     - encoder:  compresses observation -> features
-                     - inverse model: "what action caused this state change?"
-                       (this is what stops the agent from being curious about
-                       irrelevant noise — it only cares about consequences
-                       of its OWN actions)
-                     - forward model: "what will happen if I do this?"
-                     - intrinsic reward = how wrong the forward model was
-agent.py           PPO actor-critic — the part that actually decides what
-                   to do and learns from combined reward (task + curiosity)
-train.py           Runs it end to end, logs success rate + curiosity signal
-plot_results.py    Compares a curious run against a plain-PPO baseline
+State
+   ↓
+Action
+   ↓
+Reward
+   ↓
+Learning
 ```
 
-## Run it yourself
+However, in many real-world problems, rewards are extremely rare.
+
+This project explores a different idea:
+
+> **An intelligent agent should be able to learn simply because it wants to understand the world better.**
+
+Instead of waiting for rewards, the agent creates an **intrinsic reward** based on its own prediction errors.
+
+```
+State
+   ↓
+Predict Future
+   ↓
+Reality
+   ↓
+Prediction Error
+   ↓
+Intrinsic Reward
+   ↓
+Exploration
+```
+
+This enables the agent to actively explore unfamiliar parts of an environment even before discovering the actual task objective.
+
+---
+
+# Features
+
+* Intrinsic Curiosity Module (ICM)
+* PPO Actor-Critic implementation
+* Sparse-reward GridWorld environment
+* Partial observability
+* Forward and Inverse Dynamics Models
+* Prediction-error-based intrinsic rewards
+* Curiosity vs Baseline comparison
+* Training visualization
+* Clean and modular PyTorch implementation
+
+---
+
+# Project Structure
+
+```
+.
+├── agent.py                # PPO Actor-Critic implementation
+├── environment.py          # Sparse reward GridWorld
+├── icm.py                  # Intrinsic Curiosity Module
+├── train.py                # Training pipeline
+├── plot_results.py         # Training visualization
+├── history_curious.npz
+├── history_baseline.npz
+├── requirements.txt
+└── README.md
+```
+
+---
+
+# Architecture
+
+```
+                   GridWorld
+                       │
+                Current Observation
+                       │
+                       ▼
+                PPO Actor-Critic
+                       │
+                 Selected Action
+                       │
+                       ▼
+                 Environment Step
+                       │
+         Next State + External Reward
+                       │
+          ┌────────────┴────────────┐
+          ▼                         ▼
+ Intrinsic Curiosity Module     PPO Update
+          │
+          ▼
+Prediction Error
+          │
+          ▼
+Intrinsic Reward
+          │
+          ▼
+Combined Reward
+```
+
+---
+
+# Components
+
+## GridWorld Environment
+
+The environment is a procedurally generated maze designed to provide extremely sparse rewards.
+
+Characteristics:
+
+* Random internal obstacles
+* Partial observations
+* Unknown goal location
+* Zero reward until reaching the goal
+* Episode termination by success or maximum steps
+
+This setup forces meaningful exploration rather than memorization.
+
+---
+
+## PPO Agent
+
+The decision-making component is implemented using **Proximal Policy Optimization (PPO)**.
+
+The network consists of:
+
+```
+Observation
+      │
+ Shared Neural Network
+      │
+ ┌────┴────┐
+ │         │
+ ▼         ▼
+Actor    Critic
+```
+
+The actor learns which action to take.
+
+The critic estimates the expected future reward.
+
+---
+
+## Intrinsic Curiosity Module (ICM)
+
+The ICM provides the internal motivation mechanism.
+
+It consists of three neural networks.
+
+### Encoder
+
+Transforms raw observations into compact feature representations.
+
+```
+Observation
+      │
+      ▼
+ Latent Features
+```
+
+---
+
+### Inverse Model
+
+Learns which action caused the observed transition.
+
+```
+State
+
++
+
+Next State
+
+↓
+
+Predicted Action
+```
+
+This forces the learned representation to focus on aspects of the environment that the agent can actually control.
+
+---
+
+### Forward Model
+
+Predicts what should happen after performing an action.
+
+```
+Current State
+
++
+
+Action
+
+↓
+
+Predicted Next State
+```
+
+Prediction error becomes the intrinsic reward.
+
+```
+Prediction Error
+        ↓
+Curiosity Reward
+```
+
+The more surprising the outcome, the greater the motivation to explore.
+
+---
+
+# Training Process
+
+Each episode follows the following pipeline:
+
+```
+Reset Environment
+        ↓
+Observe State
+        ↓
+Choose Action
+        ↓
+Interact
+        ↓
+Store Transition
+        ↓
+Compute Curiosity Reward
+        ↓
+Train ICM
+        ↓
+Compute PPO Advantages
+        ↓
+Update Policy
+        ↓
+Repeat
+```
+
+---
+
+# Running the Project
+
+## Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+or
 
 ```bash
 pip install torch numpy matplotlib gymnasium
-
-# curious agent
-python3 train.py --episodes 350 --curiosity 1 --seed 3 --size 12 --max_steps 160
-
-# baseline, same maze, same seed, no curiosity reward
-python3 train.py --episodes 350 --curiosity 0 --seed 3 --size 12 --max_steps 160
-
-python3 plot_results.py   # produces comparison.png
 ```
 
-## What actually happened when I ran it (real result, not simulated)
+---
 
-On a 12x12 maze with a 160-step budget:
+## Train Curious Agent
 
-- **Curious agent**: 0% success for ~250 episodes (still building its
-  internal model of the maze), then climbs to **100% success** by ~episode 320.
-- **Baseline PPO** (identical network, identical hyperparameters, same
-  random seed, only difference is curiosity reward is computed but not fed
-  to the policy): **never solves it once** in 350 episodes.
+```bash
+python train.py \
+    --episodes 350 \
+    --curiosity 1 \
+    --seed 3 \
+    --size 12 \
+    --max_steps 160
+```
 
-The second plot (`comparison.png`, right panel) is the more interesting
-one: it shows the ICM's own prediction error over time — literally "how
-surprised was the agent this episode."
-- The curious agent's surprise **rises then falls**: it climbs as the agent
-  pushes into unexplored parts of the maze, then drops once it has mastered
-  those regions (nothing left to be surprised about locally) and success
-  rate takes off right after that peak.
-- The baseline's surprise **monotonically collapses toward zero** — it
-  converges early onto a small loop of familiar states and stops
-  encountering anything new. It isn't stupid, it's just never given a
-  reason to leave what it already knows. That's the whole thesis of
-  curiosity-driven learning made visible in one chart.
+---
 
-On easy mazes (e.g. `--size 10 --max_steps 200`) the two are much closer,
-because PPO's built-in entropy bonus already provides enough random
-exploration to stumble onto the goal. Curiosity's advantage shows up
-specifically when the environment is hard enough that undirected
-exploration isn't good enough — which is the realistic case for anything
-you'd actually call "researching on its own."
+## Train Baseline
 
-## Why this is v1, not the finish line
+```bash
+python train.py \
+    --episodes 350 \
+    --curiosity 0 \
+    --seed 3 \
+    --size 12 \
+    --max_steps 160
+```
 
-This system is curious (seeks novelty) and it's a real learning loop.
-It is **not yet**:
-- **"Thinking ahead"** — it reacts to the current step, it doesn't imagine
-  multiple future steps before choosing. Next step: replace the flat critic
-  with a **world model** (Dreamer-style) so the agent can roll out imagined
-  trajectories internally before acting.
-- **Able to ask questions** — there's no channel for it to signal "I'm
-  uncertain, help me." Next step: expose the ICM's own prediction
-  uncertainty as a signal that triggers a query action when it crosses a
-  threshold.
-- **Continually adapting without forgetting** — if you drop this agent into
-  a new maze layout, it will partially forget the old one as it learns the
-  new one. Next step: add elastic weight consolidation or a replay buffer
-  across environments for real lifelong learning.
-- **Open-ended** — one agent, one environment. Next step (advanced): pair
-  this with an evolving population of increasingly hard mazes (POET-style)
-  so the agent's curriculum keeps generating itself.
+---
 
-Each of those is a concrete, buildable v2 — none of them require a
-transformer or an LLM anywhere in the loop.
+## Generate Comparison Graphs
+
+```bash
+python plot_results.py
+```
+
+This generates
+
+```
+comparison.png
+```
+
+containing
+
+* Success rate comparison
+* Curiosity signal comparison
+
+---
+
+# Experimental Results
+
+The repository demonstrates a comparison between:
+
+### Curious Agent
+
+* PPO
+* Intrinsic Curiosity Module
+* Prediction-error reward
+
+and
+
+### Baseline Agent
+
+* PPO only
+* No intrinsic reward
+
+In the included experiment, the curiosity-driven agent eventually learns to solve the sparse-reward maze, while the baseline agent fails to discover the goal under the same training conditions. Refer to the generated plots and training histories for the observed behavior in this project.
+
+---
+
+# Technologies
+
+* Python
+* PyTorch
+* NumPy
+* Matplotlib
+* Gymnasium-inspired environment
+
+---
+
+# Future Roadmap
+
+Curious Agent v1 demonstrates intrinsic curiosity.
+
+Future versions aim to evolve into a broader cognitive architecture including:
+
+* World Models
+* Planning before acting
+* Episodic Memory
+* Semantic Memory
+* Working Memory
+* Knowledge Graphs
+* Continual Learning
+* Lifelong Adaptation
+* Question Generation
+* Belief Revision
+* Goal Management
+* Self Reflection
+* Autonomous Research
+* Multi-Agent Learning
+
+The long-term objective is to explore cognitive AI systems that learn continuously through curiosity, reasoning, memory, and interaction rather than relying solely on predefined rewards or transformer-centric architectures.
+
+---
+
+# Inspiration
+
+This project is inspired by research in:
+
+* Intrinsic Curiosity Modules (ICM)
+* Reinforcement Learning
+* Cognitive Architectures
+* Neuroscience-inspired AI
+* Autonomous Learning
+* Intrinsic Motivation
+
+---
+
+# License
+
+This project is released under the MIT License.
+
+---
+
+# Author
+
+**Tirth Alpeshbhai Rathod**
+
+AI Research • Reinforcement Learning • Cognitive Architectures • Autonomous Intelligence
+
+> *"The future of AI isn't just generating better answers—it's building systems that are driven to discover them."*
